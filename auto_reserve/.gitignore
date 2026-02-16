@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+data/playwright/
+data/*.json
+data/session_*.json
+token.json

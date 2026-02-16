@@ -1,0 +1,75 @@
+services:
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mqtt/config:/mosquitto/config
+      - ./mqtt/data:/mosquitto/data
+      - ./mqtt/log:/mosquitto/log
+    networks:
+      - shared_services
+
+  printer-api:
+    build:
+      context: ./printer
+    container_name: printer-api
+    restart: always
+    depends_on:
+      - mqtt
+    env_file:
+      - .env
+    environment:
+      MQTT_HOST: mqtt
+      MQTT_PORT: 1883
+      MQTT_USERNAME: leandro_printer
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+      APP_API_KEY: ${APP_API_KEY}
+      TZ: Europe/Zurich
+    # WICHTIG: Alte Ports entfernt, damit Zugriff nur noch sicher über Caddy erfolgt
+    # ports:
+    #   - "8000:8080"
+    expose:
+      - "8080" # Macht den Port intern für Caddy sichtbar
+    networks:
+      - shared_services
+
+  caddy:
+    image: caddy:latest
+    container_name: caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - printer-api
+    networks:
+      - shared_services
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run --token ${TUNNEL_TOKEN}
+    env_file:
+      - .env
+    volumes:
+      - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+    depends_on:
+      - caddy
+    networks:
+      - shared_services
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  shared_services:
+    external: true

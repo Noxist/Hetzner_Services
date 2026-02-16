@@ -1,0 +1,371 @@
+from fastapi.responses import HTMLResponse
+from logic import PRINT_WIDTH_PX
+
+# --- HTML Layout ---
+
+_HTML_BASE = """
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{title}</title>
+<link rel="icon" href="/favicon.ico" type="image/x-icon">
+<style>{css}</style>
+</head>
+<body>
+ <header class="top">
+  <div class="top-inner wrap">
+    <a href="/ui" class="title" style="text-decoration:none; color:inherit;">Receipt Printer</a>
+    <div class="status-pill" id="status-pill" role="status" aria-live="polite">
+      <span class="status-dot"></span>
+      <span class="status-text">Checking…</span>
+    </div>
+    <div class="spacer"></div>
+    <nav class="nav" id="main-nav">
+      <a class="link" href="/ui">Printer</a>
+      <a class="link guest-hide" href="/ui/guests">Guests</a>
+      <a class="link guest-hide" href="/ui/settings">Settings</a>
+      <a class="link {logout_class}" id="logout-link" href="/ui/logout">Logout</a>
+    </nav>
+  </div>
+</header>
+  <main class="wrap">{content}</main>
+<script>{js}</script>
+</body>
+</html>
+"""
+
+# --- Login Page ---
+
+HTML_LOGIN = """
+<div style="max-width: 400px; margin: 40px auto;">
+  <section class="card">
+    <h3 class="title" style="margin-bottom:16px; text-align:center">Login</h3>
+    <form method="post" action="/ui/login">
+      <label for="pass">Password</label>
+      <input id="pass" type="password" name="pass" placeholder="Enter UI Password" required autofocus>
+      
+      <label style="margin-top:14px; display:flex; align-items:center; gap:8px; cursor:pointer">
+        <input type="checkbox" name="remember" checked style="width:auto; margin:0"> 
+        Stay signed in
+      </label>
+      
+      <div class="form-actions" style="margin-top:20px">
+        <button type="submit" style="width:100%">Sign In</button>
+      </div>
+    </form>
+  </section>
+</div>
+"""
+
+# --- Main UI Content (Tabs) - No Auth Fields! ---
+
+HTML_UI = f"""
+<div class="tabs" role="tablist" aria-label="Mode">
+  <div class="tab" role="tab" id="tab-tpl" aria-controls="pane_tpl" aria-selected="true" tabindex="0">Template</div>
+  <div class="tab" role="tab" id="tab-raw" aria-controls="pane_raw" aria-selected="false" tabindex="-1">Raw</div>
+  <div class="tab" role="tab" id="tab-img" aria-controls="pane_img" aria-selected="false" tabindex="-1">Image</div>
+</div>
+
+<section id="pane_tpl" class="card" role="tabpanel" aria-labelledby="tab-tpl">
+  <form method="post" action="/ui/print/template">
+    <label for="title">Title</label>
+    <input id="title" type="text" name="title" placeholder="Tasks">
+
+    <label for="lines">Lines (one per line)</label>
+    <textarea id="lines" name="lines" placeholder="Buy milk&#10;Pay bills&#10;Write code"></textarea>
+
+    <label><input type="checkbox" name="add_dt"> Add date/time</label>
+
+    <div class="form-actions">
+      <button type="submit">Print</button>
+    </div>
+  </form>
+</section>
+
+<section id="pane_raw" class="card" role="tabpanel" aria-labelledby="tab-raw" hidden>
+  <form method="post" action="/ui/print/raw">
+    <label for="text">Raw text</label>
+    <textarea id="text" name="text" placeholder="Any text..."></textarea>
+
+    <label><input type="checkbox" name="add_dt"> Add date/time</label>
+
+    <div class="form-actions">
+      <button type="submit">Print</button>
+    </div>
+  </form>
+</section>
+
+<section id="pane_img" class="card" role="tabpanel" aria-labelledby="tab-img" hidden>
+  <form method="post" action="/ui/print/image" enctype="multipart/form-data">
+    <div class="grid">
+      <div>
+        <label for="imgfile">Upload Image</label>
+        <input id="imgfile" type="file" name="file" accept="image/*" hidden>
+        <label for="imgfile" class="file-btn">Choose File</label>
+        <span id="file-chosen">No file selected</span>
+      </div>
+      <div>
+        <label for="img_title" style="margin-top:0">Title (optional)</label>
+        <input id="img_title" type="text" name="img_title" placeholder="Title">
+        <label for="img_subtitle" style="margin-top:8px">Subtitle (optional)</label>
+        <input id="img_subtitle" type="text" name="img_subtitle" placeholder="Subtitle">
+      </div>
+    </div>
+    
+    <div class="form-actions">
+      <button type="submit">Print</button>
+    </div>
+    <div id="drop-zone" class="drop-zone">
+      Drag & Drop Image Here
+    </div>
+  </form>
+</section>
+"""
+
+# --- Functions ---
+
+def html_page(title: str, content: str, show_logout: bool = False) -> HTMLResponse:
+    logout_class = "" if show_logout else "hidden"
+    
+    html = _HTML_BASE \
+        .replace("{title}", title) \
+        .replace("{content}", content) \
+        .replace("{css}", _CSS) \
+        .replace("{js}", _JS) \
+        .replace("{logout_class}", logout_class)
+        
+    return HTMLResponse(html)
+
+def login_page(error: str = None) -> HTMLResponse:
+    content = HTML_LOGIN
+    if error:
+        content = f"<div class='card' style='border-color:var(--err); color:var(--err); max-width:400px; margin:20px auto; text-align:center'>{error}</div>" + content
+    return html_page("Login", content, show_logout=False)
+
+def guest_ui_html(ignored_flag: str = "") -> str:
+    return HTML_UI
+
+def settings_html_form() -> str:
+    from logic import settings_effective, SET_KEYS
+    eff = settings_effective()
+    rows = []
+
+    for key, default, typ, opts in SET_KEYS:
+        val = eff.get(key, default)
+        label = key.replace("RECEIPT_", "").replace("_", " ").title()
+        
+        if typ == "select":
+            options = "".join([f'<option value="{o}"{" selected" if str(val)==str(o) else ""}>{o}</option>' for o in opts])
+            field = f'<select name="{key}">{options}</select>'
+        elif typ == "checkbox":
+            checked = " checked" if str(val).lower() in ("1","true","yes","on","y","t") else ""
+            field = f'<input type="checkbox" name="{key}" value="1"{checked}>'
+        elif typ == "number":
+            field = f'<input type="number" step="any" name="{key}" value="{val}">'
+        else:
+            field = f'<input type="text" name="{key}" value="{val}">'
+            
+        rows.append(f"<div><label>{label}</label>{field}</div>")
+
+    form = f"""
+    <section class="card">
+      <form method="post" action="/ui/settings/save">
+        <div class="grid">
+          {''.join(rows)}
+        </div>
+        <div class="row" style="margin-top:16px; gap:12px; justify-content:flex-end">
+          <button type="submit">Save</button>
+          <a class="link" href="/ui/settings/test">Test print</a>
+        </div>
+      </form>
+    </section>
+    """
+    return form
+
+# --- Static Assets ---
+
+_CSS = r"""
+  :root{
+    --bg:#f5f7fa; --card:#ffffff; --muted:#475467; --text:#0b1220; --line:#e7eaf0;
+    --accent:#3b82f6; --accent-2:#8b5cf6; --err:#ef4444; --radius:18px;
+    --shadow:0 4px 24px rgba(0,0,0,.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0b0f14; --card:#121821; --muted:#98a2b3; --text:#e6edf3; --line:#1e2a38;
+      --shadow:0 6px 26px rgba(0,0,0,.35);
+    }
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    color:var(--text); line-height:1.4;
+    background:
+      radial-gradient(1200px 800px at 20% -10%, rgba(59,130,246,.15), transparent 70%),
+      radial-gradient(1000px 600px at 120% 10%, rgba(139,92,246,.12), transparent 70%),
+      var(--bg);
+    min-height:100vh;
+    display:flex; flex-direction:column;
+  }
+  .wrap{max-width:920px; margin:0 auto; padding:clamp(16px,3vw,28px); flex:1; width:100%}
+  header.top{position:sticky; top:0; backdrop-filter:saturate(1.2) blur(10px);
+    background:color-mix(in srgb, var(--bg) 80%, transparent); border-bottom:1px solid var(--line); z-index:10}
+  .top-inner{display:flex; align-items:center; gap:14px; padding:12px clamp(12px,3vw,24px)}
+  .title{font-weight:700; font-size:1.1rem; letter-spacing:.2px}
+  .status-pill{display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px;
+    border:1px solid var(--line); background:color-mix(in srgb, var(--card) 92%, transparent);
+    color:var(--muted); font-weight:600; font-size:.92rem; min-width:150px; justify-content:flex-start;}
+  .status-dot{width:10px; height:10px; border-radius:999px; background:var(--muted); box-shadow:0 0 0 4px color-mix(in srgb, currentColor 12%, transparent);}
+  .status-pill.ok{color:#16a34a; border-color:color-mix(in srgb, #16a34a 40%, var(--line)); background:color-mix(in srgb, #16a34a 12%, var(--card));}
+  .status-pill.ok .status-dot{background:#16a34a;}
+  .status-pill.err{color:#ef4444; border-color:color-mix(in srgb, #ef4444 40%, var(--line)); background:color-mix(in srgb, #ef4444 12%, var(--card));}
+  .status-pill.err .status-dot{background:#ef4444;}
+  .spacer{flex:1}
+  .link{color:var(--muted); text-decoration:none; font-size:.95rem; margin-left:16px}
+  .link:hover{color:var(--text); text-decoration:underline}
+  .card{border:1px solid var(--line); background:color-mix(in srgb, var(--card) 95%, transparent);
+        border-radius:var(--radius); box-shadow:var(--shadow);
+        padding:clamp(16px,2.8vw,22px); margin:14px 0 22px; width:100%}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  @media (max-width:760px){ .grid{grid-template-columns:1fr} }
+  .tabs{display:flex; flex-wrap:wrap; gap:10px; padding:18px 0 10px}
+  .tab{border:1px solid var(--line); border-radius:999px; padding:9px 18px; cursor:pointer;
+       background:var(--card); font-weight:600; font-size:.95rem; user-select:none;
+       transition:all .2s ease; box-shadow:0 2px 6px rgba(0,0,0,.04);}
+  .tab[aria-selected="true"]{
+       background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:#fff;
+       border-color:transparent; box-shadow:0 4px 14px rgba(59,130,246,.35);}
+  .row{display:flex; flex-wrap:wrap; align-items:center; gap:12px}
+  .grow{flex:1 1 auto}
+  label{font-weight:600; color:var(--muted); display:block; margin:10px 0 6px}
+  textarea, input[type=text], input[type=password], input[type=file], input[type=number], select{
+    width:100%; border:1px solid var(--line); background:transparent; color:var(--text);
+    padding:12px 14px; border-radius:12px; outline:none; transition:border-color .15s, box-shadow .15s
+  }
+  textarea{min-height:140px; resize:vertical}
+  input:focus, textarea:focus, select:focus{
+    border-color:var(--accent);
+    box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent)
+  }
+  button{
+    appearance:none; border:none; cursor:pointer; font-weight:700;
+    padding:13px 22px; border-radius:12px;
+    background:linear-gradient(135deg, var(--accent), var(--accent-2)); color:#fff;
+    box-shadow:0 6px 18px rgba(59,130,246,.25);
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  button:hover{transform:translateY(-1px); box-shadow:0 8px 20px rgba(59,130,246,.3);}
+  button.secondary{background:transparent; color:var(--text); border:1px solid var(--line); box-shadow:none}
+  .hidden{display:none !important}
+
+  .file-btn{display:inline-block; background:linear-gradient(135deg, var(--accent), var(--accent-2));
+    color:#fff; padding:11px 18px; border-radius:12px; font-weight:600; cursor:pointer;
+    box-shadow:0 6px 14px rgba(59,130,246,.25);}
+  #file-chosen{margin-left:10px; color:var(--muted); font-size:.9rem}
+  .drop-zone{
+    margin-top:16px; padding:30px; border:2px dashed var(--line); 
+    text-align:center; border-radius:12px; color:var(--muted); cursor:pointer
+  }
+
+  .form-actions{display:flex; justify-content:flex-end; margin-top:18px}
+  @media (max-width:760px){
+    .form-actions{justify-content:center}
+    .form-actions button{width:100%; max-width:320px}
+  }
+  input[type="checkbox"]:focus {outline: none; box-shadow: none;}
+"""
+
+_JS = f"""
+// --- Tabs ---
+const tabs=[{{id:"tpl",btn:"tab-tpl",pane:"pane_tpl"}},{{id:"raw",btn:"tab-raw",pane:"pane_raw"}},{{id:"img",btn:"tab-img",pane:"pane_img"}}];
+function selectTab(id){{
+  if(!document.getElementById("tab-tpl")) return; // Login page skip
+  tabs.forEach(t=>{{
+    const btn=document.getElementById(t.btn),pane=document.getElementById(t.pane),active=(t.id===id);
+    if(btn && pane){{
+      btn.setAttribute("aria-selected",active?"true":"false");
+      btn.tabIndex=active?0:-1; pane.hidden=!active;
+    }}
+  }});
+  history.replaceState(null,"","#"+id);
+}}
+function initFromHash(){{
+  const h=(location.hash||"#tpl").slice(1);
+  selectTab(tabs.some(t=>t.id===h)?h:"tpl");
+}}
+tabs.forEach(t=>{{
+  const el=document.getElementById(t.btn);
+  if(el) {{
+    el.addEventListener("click",()=>selectTab(t.id));
+    el.addEventListener("keydown",e=>{{ if(e.key==="Enter"||e.key===" "){{ e.preventDefault(); selectTab(t.id); }} }});
+  }}
+}});
+window.addEventListener("hashchange",initFromHash);
+initFromHash();
+
+// --- File Upload & Drag/Drop ---
+document.addEventListener("DOMContentLoaded",()=>{{
+  const input=document.getElementById("imgfile");
+  const dropZone=document.getElementById("drop-zone");
+  const fileChosen=document.getElementById("file-chosen");
+  const statusPill=document.getElementById("status-pill");
+  const statusText=statusPill ? statusPill.querySelector(".status-text") : null;
+  
+  if(input){{
+    input.addEventListener("change", function(){{
+      if(this.files.length) {{
+        fileChosen.textContent = this.files[0].name;
+        if(dropZone) dropZone.textContent = "Selected: " + this.files[0].name;
+      }}
+    }});
+  }}
+  
+  if(dropZone && input){{
+    dropZone.addEventListener("click", ()=>input.click());
+    ["dragenter","dragover"].forEach(ev=>dropZone.addEventListener(ev,e=>{{
+      e.preventDefault(); dropZone.style.background="rgba(59,130,246,0.08)";
+    }}));
+    ["dragleave","drop"].forEach(ev=>dropZone.addEventListener(ev,e=>{{
+      e.preventDefault(); dropZone.style.background="";
+    }}));
+    dropZone.addEventListener("drop",e=>{{
+      e.preventDefault();
+      if(e.dataTransfer.files.length){{
+        input.files = e.dataTransfer.files;
+        dropZone.textContent = "Selected: " + e.dataTransfer.files[0].name;
+        fileChosen.textContent = e.dataTransfer.files[0].name;
+      }}
+    }});
+  }}
+
+  async function refreshStatus(){{
+    if(!statusPill || !statusText) return;
+    const setState=(state,label,hint)=>{{
+      statusPill.classList.remove("ok","err");
+      if(state) statusPill.classList.add(state);
+      statusText.textContent=label;
+      statusPill.title=hint||"";
+    }};
+    try{{
+      const res=await fetch("/ui/status",{{cache:"no-store"}});
+      if(!res.ok) throw new Error(res.status+"");
+      const data=await res.json();
+      const online=!!data.online;
+      const detail=data.detail||"";
+      setState(online?"ok":"err", online?"Printer online":"Printer offline", detail);
+    }}catch(e){{
+      setState("err","Status unknown","Could not fetch status");
+    }}
+  }}
+  refreshStatus();
+  setInterval(refreshStatus, 30000);
+}});
+
+// --- Guest Mode Cleanup ---
+if(location.pathname.startsWith("/guest/")){{
+  document.querySelectorAll(".guest-hide").forEach(el=>el.style.display="none");
+}}
+""".replace("{w}", str(PRINT_WIDTH_PX))

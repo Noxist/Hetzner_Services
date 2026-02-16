@@ -1,0 +1,11 @@
+{
+    auto_https off
+}
+
+http://thegrandprinterofmemesandunfinitetodosservanttonox.tech, http://www.thegrandprinterofmemesandunfinitetodosservanttonox.tech {
+    reverse_proxy printer-api:8080
+}
+
+http://bibliothek.thegrandprinterofmemesandunfinitetodosservanttonox.tech {
+    reverse_proxy roombooker_app:5000
+}

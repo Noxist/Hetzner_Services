@@ -1,0 +1,46 @@
+# Secrets
+.env
+*.env
+google_credentials.json
+passwords.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Runtime data
+auto_reserve_data/
+data/playwright/
+data/*.json
+data/logs/
+data/debug_scans/
+*.log
+debug_dumps/
+debug_scans/
+
+# Playwright browsers
+chromium*/
+ffmpeg*/
+
+# Docker volumes
+caddy_data/
+caddy_config/
+mqtt/data/
+mqtt/log/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Fonts (binary)
+printer/ttf/
+
+# Printer static uploads
+printer/static/
