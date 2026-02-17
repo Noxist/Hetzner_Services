@@ -9,3 +9,11 @@ http://thegrandprinterofmemesandunfinitetodosservanttonox.tech, http://www.thegr
 http://bibliothek.thegrandprinterofmemesandunfinitetodosservanttonox.tech {
     reverse_proxy roombooker_app:5000
 }
+
+http://bio.thegrandprinterofmemesandunfinitetodosservanttonox.tech {
+    reverse_proxy bio-dashboard:8501
+}
+
+http://bioapi.thegrandprinterofmemesandunfinitetodosservanttonox.tech {
+    reverse_proxy bio-dashboard:8000
+}

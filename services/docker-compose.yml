@@ -52,6 +52,31 @@ services:
     networks:
       - shared_services
 
+  bio-dashboard:
+    build:
+      context: ./bio-dashboard
+    container_name: bio-dashboard
+    restart: always
+    env_file:
+      - .env
+    environment:
+      BIO_DATA_DIR: /data
+      BIO_API_KEY: ${BIO_API_KEY}
+      HA_URL: ${HA_URL}
+      HA_TOKEN: ${HA_TOKEN}
+      HA_POLL_INTERVAL_SEC: 900
+      PRINTER_URL: http://printer-api:8080
+      PRINTER_API_KEY: ${APP_API_KEY}
+      BIO_API_URL: http://localhost:8000
+      TZ: Europe/Zurich
+    volumes:
+      - bio_data:/data
+    expose:
+      - "8000"
+      - "8501"
+    networks:
+      - shared_services
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
@@ -69,6 +94,7 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  bio_data:
 
 networks:
   shared_services:

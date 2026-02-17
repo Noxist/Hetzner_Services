@@ -3,4 +3,8 @@ ingress:
     service: http://caddy:80
   - hostname: bibliothek.thegrandprinterofmemesandunfinitetodosservanttonox.tech
     service: http://caddy:80
+  - hostname: bio.thegrandprinterofmemesandunfinitetodosservanttonox.tech
+    service: http://caddy:80
+  - hostname: bioapi.thegrandprinterofmemesandunfinitetodosservanttonox.tech
+    service: http://caddy:80
   - service: http_status:404
