@@ -1,0 +1,29 @@
+{
+  "_comment": "Day preferences for barber booking. Weights are multipliers (1.0 = neutral, >1 = preferred, <1 = avoid). Weekdays: 0=Monday, 6=Sunday. 'reasons' is for your reference only.",
+  "day_weights": {
+    "0": {"weight": 1.0, "label": "Monday",    "reasons": []},
+    "1": {"weight": 1.5, "label": "Tuesday",   "reasons": ["Institut in Bern - already commuting"]},
+    "2": {"weight": 1.0, "label": "Wednesday", "reasons": []},
+    "3": {"weight": 1.2, "label": "Thursday",  "reasons": []},
+    "4": {"weight": 1.3, "label": "Friday",    "reasons": ["Can show haircut at school next week"]},
+    "5": {"weight": 0.8, "label": "Saturday",  "reasons": ["Weekend, extra trip to Bern"]},
+    "6": {"weight": 0.0, "label": "Sunday",    "reasons": ["Closed"]}
+  },
+  "date_overrides": {
+    "_comment": "Override weight for specific dates (YYYY-MM-DD). Takes priority over day_weights.",
+    "_example": {"2026-03-15": {"weight": 2.0, "reason": "Already in Bern for event"}}
+  },
+  "custom_preferences": {
+    "_comment": "Future extensible preferences. Each preference adds a bonus to the slot score.",
+    "school_after_appointment": {
+      "enabled": false,
+      "bonus": 3.0,
+      "description": "Prefer slots where I have school afterwards (can show haircut)"
+    },
+    "institut_tuesday": {
+      "enabled": true,
+      "bonus": 5.0,
+      "description": "Tuesdays I have Institut in Bern - combine trips"
+    }
+  }
+}

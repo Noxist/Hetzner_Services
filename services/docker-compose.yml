@@ -77,6 +77,52 @@ services:
     networks:
       - shared_services
 
+  availability:
+    build:
+      context: ./availability
+    container_name: availability
+    restart: always
+    environment:
+      GOOGLE_CREDENTIALS_FILE: /data/google_credentials.json
+      CALENDARS_CONFIG: /app/calendars.json
+      URGENCY_CONFIG: /app/urgency_config.json
+      TZ: Europe/Zurich
+    volumes:
+      - barber_data:/data      # shares credentials with barber-booker
+    expose:
+      - "8070"
+    networks:
+      - shared_services
+
+  barber-booker:
+    build:
+      context: ./barber
+    container_name: barber-booker
+    restart: always
+    depends_on:
+      - availability
+    env_file:
+      - .env
+    environment:
+      BARBER_DATA_DIR: /data
+      GOOGLE_CREDENTIALS_FILE: /data/google_credentials.json
+      CALENDAR_ID: ${BARBER_CALENDAR_ID}
+      AVAILABILITY_URL: http://availability:8070
+      TRAVEL_BUFFER_BEFORE: 60
+      TRAVEL_BUFFER_AFTER: 30
+      BIO_API_URL: http://bio-dashboard:8000
+      BIO_API_KEY: ${BIO_API_KEY}
+      PRINTER_URL: http://printer-api:8080
+      PRINTER_API_KEY: ${APP_API_KEY}
+      CHECK_INTERVAL_HOURS: 6
+      TZ: Europe/Zurich
+    volumes:
+      - barber_data:/data
+    expose:
+      - "8090"
+    networks:
+      - shared_services
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
@@ -95,6 +141,7 @@ volumes:
   caddy_data:
   caddy_config:
   bio_data:
+  barber_data:
 
 networks:
   shared_services:

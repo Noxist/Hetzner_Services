@@ -9,7 +9,11 @@ from datetime import datetime
 import httpx
 
 from app.config import HA_URL, HA_TOKEN, HA_SENSORS
-from app.core.database import insert_health_snapshot, get_latest_health_snapshot
+from app.core.database import (
+    insert_health_snapshot, get_latest_health_snapshot,
+    insert_weight, get_latest_weight,
+    insert_water_event, get_todays_water_total,
+)
 
 log = logging.getLogger("bio.ha_importer")
 
@@ -119,6 +123,36 @@ async def poll_and_store():
         snapshot.get("sleep_duration"),
         snapshot.get("steps"),
     )
+
+    # --- Weight import from Google Fit (via HealthSync) ---
+    weight_str = results.get("user_weight")
+    is_google_fit = bool(weight_str)
+    if not weight_str:
+        weight_str = results.get("user_weight_fallback")
+    if weight_str:
+        weight_val = _parse_float(weight_str)
+        if weight_val and weight_val > 30:
+            # Google Fit sensor reports weight in grams (e.g. 93800.0 g)
+            # Convert to kg if the value is implausibly high for kg
+            if weight_val > 500:
+                weight_val = weight_val / 1000.0
+                log.info("Converted weight from grams: %.1f kg", weight_val)
+            latest_weight = get_latest_weight()
+            if not latest_weight or abs(latest_weight.get("weight_kg", 0) - weight_val) > 0.05:
+                source = "google_fit" if is_google_fit else "ha"
+                insert_weight(weight_val, source=source)
+                log.info("Updated weight from %s: %.1f kg", source, weight_val)
+
+    # --- Water sensor import from HA ---
+    water_str = results.get("water_daily")
+    if water_str:
+        water_val = _parse_float(water_str)
+        if water_val and water_val > 0:
+            current_total = get_todays_water_total()
+            delta = int(water_val) - current_total
+            if delta > 0:
+                insert_water_event(delta, source="ha")
+                log.info("Imported water delta from HA: +%d ml (total: %d)", delta, int(water_val))
 
 
 async def fetch_intake_events_from_ha():

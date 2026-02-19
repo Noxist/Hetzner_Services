@@ -1,0 +1,27 @@
+{
+  "default_urgency": 2,
+  "levels": {
+    "1": "Top-Prioritaet: Nur die staerksten Kalender blockieren (z.B. Termine)",
+    "2": "Mittel: Termine + Stundenplan blockieren",
+    "3": "Niedrig: Fast alles blockiert, es braucht eine echte Luecke"
+  },
+  "calendar_rules": {
+    "Termine": {
+      "blocks_at": 1,
+      "comment": "Immer blockierend -- echte Termine"
+    },
+    "Stundenplan s2": {
+      "blocks_at": 2,
+      "comment": "Blockiert ab Stufe 2 (nicht bei Top-Prioritaet)"
+    },
+    "Chilling with the Girls (AND LEANDRO)": {
+      "blocks_at": 3,
+      "title_suffix": " X",
+      "comment": "Nur Events mit ' X' am Titelende blockieren, und auch nur ab Stufe 3. Events ohne X blockieren nie."
+    },
+    "Zug Fahren": {
+      "blocks_at": 3,
+      "comment": "Zugfahren blockiert nur bei niedriger Prioritaet (Stufe 3)"
+    }
+  }
+}
