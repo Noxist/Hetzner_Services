@@ -1,244 +1,126 @@
 # Hetzner Services
 
-Übersicht über alle Services, Scripts und Automationen auf dem Hetzner Server (`noxist-core`).
+This repository tracks the shared infrastructure layer for the Hetzner host.
 
----
+Live path on the server:
 
-## Server-Architektur
+- `/home/leandro/services`
 
-```
-/home/leandro/
-├── services/                        # Shared infrastructure + alle Services
-│   ├── docker-compose.yml           # Caddy, Cloudflared, MQTT, Printer, Bio-Dashboard
-│   ├── Caddyfile                    # Reverse-Proxy Konfiguration
-│   ├── .env                         # Secrets (nicht im Repo)
-│   ├── cloudflared/                 # Cloudflare Tunnel Config
-│   ├── mqtt/                        # Mosquitto MQTT Broker
-│   ├── printer/                     # Thermal Printer API
-│   └── bio-dashboard/               # Life Manager / Bio-Dashboard
-│
-├── auto_reserve/                    # RoomBooker Applikation (eigenes Repo)
-│   └── docker-compose.yml           # Eigener Compose-Stack
-│
-└── auto_reserve_data/               # RoomBooker Runtime-Daten
-    ├── jobs.json, rooms.json, ...   # Konfig & State
-    ├── debug_dumps/                 # HTML-Dumps zur Fehleranalyse
-    └── logs/                        # Applikations-Logs
-```
+This repo is the Git-backed copy of the stack-level deployment files that wire Cloudflare Tunnel, Caddy, and the shared Docker services together.
 
----
+## Layout standard
 
-## Services
+Code lives under:
 
-### 1. Life Manager / Bio-Dashboard (`bio-dashboard`)
+- `/home/leandro/services/<app-name>`
 
-Quantified-Self System mit pharmakokinetischem Modell, Health-Tracking und adaptivem Modell-Training.
+Persistent runtime data lives under:
 
-| Detail | Wert |
-|--------|------|
-| **Container** | `bio-dashboard` |
-| **Ports** | `8000` (FastAPI), `8501` (Streamlit) |
-| **Subdomains** | `bio.thegrandprinter...tech` (UI), `bioapi.thegrandprinter...tech` (API) |
-| **Repo** | [Noxist/life_manager](https://github.com/Noxist/life_manager) |
-| **Stack** | Python, FastAPI, Streamlit, Plotly, SQLite |
+- `/home/leandro/service_data/<app-name>`
 
-**Features:**
-- Pharmakokinetik-Modellierung (Bateman-Funktionen): Elvanse, Medikinet IR/retard, Koffein
-- Bio-Score: Circadian-Rhythmus + Substanz-Boosts + Schlaf-Modifier
-- Home Assistant Integration (Pixel Watch Health-Sensoren: HR, HRV, SpO2, Schlaf)
-- Subjektive Bewertung (Fokus, Laune, Energie, Appetit, Innere Unruhe)
-- Mahlzeiten-Tracking
-- Adaptives Modell-Training (Elvanse-Wirkungskurve personalisieren)
-- Log-Reminder (5x/Tag optimaler Schedule)
-- CNS-Last Warnung
-- Korrelationsanalyse (Substanz-Level vs. Fokus)
-- Tages-Timeline mit Intake-Markern
+Examples:
 
-**Geplante Etappen:**
-- Etappe 2: Auto-Barber
-- Etappe 3: Super Mega Ultra Planer
-- Etappe 4: Daily Briefing
+- `/home/leandro/services/auto_reserve`
+- `/home/leandro/services/printer`
+- `/home/leandro/services/bio-dashboard`
+- `/home/leandro/service_data/auto_reserve`
 
----
+Compatibility symlinks still exist for RoomBooker:
 
-### 2. RoomBooker (`auto_reserve`)
+- `/home/leandro/auto_reserve` -> `/home/leandro/services/auto_reserve`
+- `/home/leandro/auto_reserve_data` -> `/home/leandro/service_data/auto_reserve`
 
-Automatisiertes Raumbuchungssystem für [raumreservation.ub.unibe.ch](https://raumreservation.ub.unibe.ch).
+## What this repo owns
 
-| Detail | Wert |
-|--------|------|
-| **Container** | `roombooker_app` |
-| **Port** | `5000` (intern) |
-| **Subdomain** | `bibliothek.thegrandprinter...tech` |
-| **Repo** | [Noxist/room_booker_hetzner](https://github.com/Noxist/room_booker_hetzner) |
-| **Stack** | Python, Flask, Playwright |
+Tracked here:
 
-**Features:**
-- Automatische Raumbuchung mit Account-Rotation
-- 14-Tage-Vorausbuchung mit Scheduler
-- Gap-Splitting (lange Buchungen → mehrere 4h-Blöcke)
-- Room-Scoring nach Verfügbarkeit, Distanz & Gewichtung
-- Google Calendar Sync (Placeholder → bestätigte Events)
-- Web-Dashboard + CLI
-- Overlap-Detection mit 6 Auflösungsoptionen
+- `services/docker-compose.yml`
+- `services/Caddyfile`
+- `services/cloudflared/config.yml`
+- top-level operations documentation
 
-**Cron-Jobs:**
-```
-# Täglich 00:01 - Neue Slots prüfen (14-Tage-Fenster)
-1 0 * * * python3 main.py --process-jobs
+Tracked in app-specific repos instead:
 
-# Alle 6 Stunden - Filler-Check
-0 */6 * * * python3 main.py --process-jobs
-```
+- `services/auto_reserve` -> `https://github.com/Noxist/room_booker_hetzner.git`
+- `services/printer` -> `https://github.com/Noxist/printer.git`
+- `services/bio-dashboard` -> `https://github.com/Noxist/life_manager.git`
+- `services/ocr` -> `https://github.com/Noxist/Bulk_OCR.git`
+- `services/organizer` -> `https://github.com/Noxist/organizer.git`
+- `services/availability` -> `https://github.com/Noxist/availability.git`
+- `services/barber` -> `https://github.com/Noxist/barber.git`
+- `services/ocr-auth` -> `https://github.com/Noxist/ocr-auth.git`
+- `services/watch-service` -> `https://github.com/Noxist/watch-service.git`
 
----
+## Security model
 
-### 3. Thermal Printer API (`printer`)
+- All public web traffic must enter through Cloudflare Tunnel.
+- Cloudflare Tunnel forwards only to `caddy`.
+- Caddy forwards only to internal Docker services on the `shared_services` network.
+- Admin interfaces are protected by Cloudflare Access.
+- Public exceptions are explicit and limited to tokenized guest flows.
+- APIs still require application-layer secrets.
 
-Druckt dynamische Inhalte auf einen Thermodrucker via MQTT.
+Current active public hostnames:
 
-| Detail | Wert |
-|--------|------|
-| **Container** | `printer-api` |
-| **Port** | `8080` (intern, via Caddy) |
-| **Domain** | `thegrandprinterofmemesandunfinitetodosservanttonox.tech` |
-| **Stack** | Python, FastAPI, MQTT |
+- `thegrandprinterofmemesandunfinitetodosservanttonox.tech` -> `printer-api:8080`
+- `bibliothek.thegrandprinterofmemesandunfinitetodosservanttonox.tech` -> `roombooker_app:5000`
+- `bio.thegrandprinterofmemesandunfinitetodosservanttonox.tech` -> `bio-dashboard:8501`
+- `bioapi.thegrandprinterofmemesandunfinitetodosservanttonox.tech` -> `bio-dashboard:8000`
+- `ocr.thegrandprinterofmemesandunfinitetodosservanttonox.tech` -> `ocr-auth:8080`
+- `watch.thegrandprinterofmemesandunfinitetodosservanttonox.tech` -> `watch-service:3000`
 
-**Features:**
-- Content-Sources: Wetter, News, Witze, Zitate, DM-Angebote
-- Text → Monochrome PNG → Base64 → MQTT → Drucker
-- Web-UI für manuelle Druckaufträge
-- Guest-Token System
-- Queue-basiertes Drucken
+Currently deactivated public hostnames:
 
----
+- `barber.thegrandprinterofmemesandunfinitetodosservanttonox.tech`
+- `availability.thegrandprinterofmemesandunfinitetodosservanttonox.tech`
+- `organizer.thegrandprinterofmemesandunfinitetodosservanttonox.tech`
+- `homebox.thegrandprinterofmemesandunfinitetodosservanttonox.tech`
 
-### 4. MQTT Broker (`mqtt`)
+## Secret locations
 
-Eclipse Mosquitto als zentraler Message Broker.
+Shared stack secrets live in:
 
-| Detail | Wert |
-|--------|------|
-| **Container** | `mqtt` |
-| **Port** | `1883` |
-| **Image** | `eclipse-mosquitto:2` |
+- `/home/leandro/services/.env`
 
-Wird vom Printer-Service und potenziell weiteren Services für Messaging genutzt.
+Important variables:
 
----
+- `APP_API_KEY`
+- `BIO_API_KEY`
+- `WATER_WATCH_TOKEN`
+- `ADMIN_SECRET`
+- `CF_ACCESS_TEAM`
+- `CF_ACCESS_AUD`
+- `TUNNEL_TOKEN`
 
-### 5. Caddy (`caddy`)
+Dedicated service env files:
 
-Reverse-Proxy für alle Web-Services.
+- `/home/leandro/services/ocr/server/.env`
+- `/home/leandro/services/watch-service/.env`
 
-| Detail | Wert |
-|--------|------|
-| **Container** | `caddy` |
-| **Ports** | `80`, `443` |
+## Operational notes
 
-**Routing:**
-| Domain | → Service |
-|--------|-----------|
-| `thegrandprinter...tech` | `printer-api:8080` |
-| `bibliothek.thegrandprinter...tech` | `roombooker_app:5000` |
-| `bio.thegrandprinter...tech` | `bio-dashboard:8501` |
-| `bioapi.thegrandprinter...tech` | `bio-dashboard:8000` |
+- `availability`, `barber-booker`, `organizer`, and `homebox` stay disabled behind the `manual` compose profile until explicitly reactivated.
+- `bibliothek` is intended to be admin-only and is now expected to require Cloudflare Access both in Cloudflare and at the RoomBooker app layer.
+- `watch` keeps `/watch/*` public by token while `/admin*` is Cloudflare-protected.
+- `ocr` is routed through `ocr-auth`, which validates Cloudflare Access JWTs before reaching the OCR backend.
 
----
+## Deploy
 
-### 6. Cloudflare Tunnel (`cloudflared`)
-
-Tunnelt den gesamten Traffic sicher über Cloudflare (kein offener Port nötig).
-
-| Detail | Wert |
-|--------|------|
-| **Container** | `cloudflared` |
-| **Image** | `cloudflare/cloudflared:latest` |
-
----
-
-## Netzwerk
-
-Alle Container laufen im gleichen Docker-Netzwerk `shared_services`:
-
-```
-Internet
-  │
-  ▼
-Cloudflare Tunnel (cloudflared)
-  │
-  ▼
-Caddy (Reverse Proxy, :80/:443)
-  ├──► printer-api:8080
-  ├──► roombooker_app:5000
-  ├──► bio-dashboard:8501  (Streamlit UI)
-  └──► bio-dashboard:8000  (FastAPI API)
-
-MQTT Broker (:1883)
-  └──► Thermodrucker (physisch, via MQTT)
-
-Home Assistant (extern, Nabu Casa)
-  └──► bio-dashboard (Health-Sensor Polling alle 15min)
-```
-
----
-
-## Repos
-
-| Repo | Beschreibung | Server-Pfad |
-|------|-------------|-------------|
-| [Noxist/Hetzner_Services](https://github.com/Noxist/Hetzner_Services) | Dieses Repo -- Gesamtübersicht | — |
-| [Noxist/life_manager](https://github.com/Noxist/life_manager) | Bio-Dashboard / Life Manager | `services/bio-dashboard/` |
-| [Noxist/room_booker_hetzner](https://github.com/Noxist/room_booker_hetzner) | RoomBooker | `auto_reserve/` |
-
----
-
-## Neue Services hinzufügen
-
-### Variante A: Teil des bestehenden Compose-Stacks
-
-Für leichtgewichtige Services, die die shared Infrastruktur (Caddy, MQTT) mitnutzen:
-
-1. Neuen Ordner unter `services/` erstellen
-2. Service in `services/docker-compose.yml` hinzufügen
-3. Subdomain in `Caddyfile` eintragen
-4. Hostname in `cloudflared/config.yml` hinzufügen
-
-### Variante B: Eigener Compose-Stack
-
-Für grössere/unabhängige Applikationen:
-
-1. Eigenen Ordner unter `~/` erstellen (z.B. `~/neuer_service/`)
-2. Eigenes `docker-compose.yml` mit `networks: shared_services (external: true)`
-3. Caddy-Routing in `services/Caddyfile` ergänzen
-
-### Konvention
-
-- Jeder Service braucht sein eigenes **Git-Repository** für den Source Code
-- **Secrets** gehören in `.env` Dateien (nie ins Repo)
-- **Runtime-Daten** werden als Docker-Volumes oder in separaten `_data/` Ordnern gespeichert
-- Container-Name sollte beschreibend sein (z.B. `myservice_app`)
-
----
-
-## Docker-Befehle
+From `/home/leandro/services`:
 
 ```bash
-# Alle Services starten (inkl. Printer, Bio-Dashboard, MQTT, Caddy, Cloudflared)
-cd ~/services && docker compose up -d
+docker compose up -d caddy cloudflared printer-api bio-dashboard bulk-ocr ocr-auth
+docker compose stop availability barber-booker organizer homebox
+```
 
-# RoomBooker starten (eigener Stack)
-cd ~/auto_reserve && docker compose up -d
+From `/home/leandro/services/watch-service`:
 
-# Einzelnen Service rebuilden
-cd ~/services && docker compose up -d --build bio-dashboard
+```bash
+docker compose up -d --build watch-service
+```
 
-# Status aller Container
-docker ps
+From `/home/leandro/services/auto_reserve`:
 
-# Logs eines Services
-docker logs -f <container_name>
-
-# Netzwerk erstellen (einmalig)
-docker network create shared_services
+```bash
+docker compose up -d --build
 ```

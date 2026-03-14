@@ -18,10 +18,10 @@ http://bioapi.thegrandprinterofmemesandunfinitetodosservanttonox.tech {
     reverse_proxy bio-dashboard:8000
 }
 
-http://barber.thegrandprinterofmemesandunfinitetodosservanttonox.tech {
-    reverse_proxy barber-booker:8090
+http://ocr.thegrandprinterofmemesandunfinitetodosservanttonox.tech {
+    reverse_proxy ocr-auth:8080
 }
 
-http://availability.thegrandprinterofmemesandunfinitetodosservanttonox.tech {
-    reverse_proxy availability:8070
+http://watch.thegrandprinterofmemesandunfinitetodosservanttonox.tech {
+    reverse_proxy watch-service:3000
 }

@@ -7,4 +7,8 @@ ingress:
     service: http://caddy:80
   - hostname: bioapi.thegrandprinterofmemesandunfinitetodosservanttonox.tech
     service: http://caddy:80
+  - hostname: ocr.thegrandprinterofmemesandunfinitetodosservanttonox.tech
+    service: http://caddy:80
+  - hostname: watch.thegrandprinterofmemesandunfinitetodosservanttonox.tech
+    service: http://caddy:80
   - service: http_status:404

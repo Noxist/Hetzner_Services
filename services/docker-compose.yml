@@ -47,6 +47,8 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - printer-api
     networks:
@@ -82,13 +84,15 @@ services:
       context: ./availability
     container_name: availability
     restart: always
+    profiles:
+      - manual
     environment:
       GOOGLE_CREDENTIALS_FILE: /data/google_credentials.json
       CALENDARS_CONFIG: /app/calendars.json
       URGENCY_CONFIG: /app/urgency_config.json
       TZ: Europe/Zurich
     volumes:
-      - barber_data:/data      # shares credentials with barber-booker
+      - barber_data:/data
     expose:
       - "8070"
     networks:
@@ -99,6 +103,8 @@ services:
       context: ./barber
     container_name: barber-booker
     restart: always
+    profiles:
+      - manual
     depends_on:
       - availability
     env_file:
@@ -123,6 +129,53 @@ services:
     networks:
       - shared_services
 
+  organizer:
+    build:
+      context: ./organizer
+    container_name: organizer
+    restart: always
+    profiles:
+      - manual
+    depends_on:
+      - homebox
+    env_file:
+      - .env
+    environment:
+      ORGANIZER_DATA_DIR: /data
+      HOMEBOX_URL: http://homebox:7745
+      HOMEBOX_EXTERNAL_URL: ${HOMEBOX_EXTERNAL_URL:-http://localhost:3100}
+      HOMEBOX_USER: ${HOMEBOX_USER}
+      HOMEBOX_PASS: ${HOMEBOX_PASS}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_ENABLED: ${OPENAI_ENABLED:-false}
+      GRID_SQUARE_MM: ${GRID_SQUARE_MM:-20}
+      SLOT_SIZE_MM: ${SLOT_SIZE_MM:-50}
+      TZ: Europe/Zurich
+    volumes:
+      - organizer_data:/data
+    expose:
+      - "8060"
+    networks:
+      - shared_services
+
+  homebox:
+    image: ghcr.io/sysadminsmedia/homebox:latest
+    container_name: homebox
+    restart: always
+    profiles:
+      - manual
+    environment:
+      - HBOX_LOG_LEVEL=info
+      - HBOX_LOG_FORMAT=text
+      - HBOX_WEB_MAX_UPLOAD_SIZE=10
+      - HBOX_OPTIONS_ALLOW_ANALYTICS=false
+    volumes:
+      - homebox-data:/data/
+    expose:
+      - "7745"
+    networks:
+      - shared_services
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
@@ -137,11 +190,56 @@ services:
     networks:
       - shared_services
 
+  bulk-ocr:
+    build:
+      context: ./ocr
+      dockerfile: server/Dockerfile
+    container_name: bulk-ocr
+    restart: always
+    env_file:
+      - ./ocr/server/.env
+    environment:
+      PYTHONUNBUFFERED: 1
+      TZ: Europe/Zurich
+    volumes:
+      - ocr_jobs:/app/server/jobs
+    expose:
+      - "8000"
+    networks:
+      - shared_services
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  ocr-auth:
+    build:
+      context: ./ocr-auth
+    container_name: ocr-auth
+    restart: always
+    depends_on:
+      - bulk-ocr
+    env_file:
+      - .env
+    environment:
+      UPSTREAM_URL: http://bulk-ocr:8000
+      CF_ACCESS_TEAM: ${CF_ACCESS_TEAM}
+      CF_ACCESS_AUD: ${CF_ACCESS_AUD}
+      TZ: Europe/Zurich
+    expose:
+      - "8080"
+    networks:
+      - shared_services
+
 volumes:
+  homebox-data:
+  organizer_data:
   caddy_data:
   caddy_config:
   bio_data:
   barber_data:
+  ocr_jobs:
 
 networks:
   shared_services:
