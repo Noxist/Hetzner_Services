@@ -37,6 +37,7 @@ Tracked here:
 - `services/docker-compose.yml`
 - `services/Caddyfile`
 - `services/cloudflared/config.yml`
+- `services/adventurelog/nginx.conf`
 - top-level operations documentation
 
 Tracked in app-specific repos instead:
@@ -54,7 +55,7 @@ Tracked in app-specific repos instead:
 ## Security model
 
 - All public web traffic must enter through Cloudflare Tunnel.
-- Cloudflare Tunnel forwards only to `caddy`.
+- Cloudflare Tunnel forwards to `caddy` for the shared stack and directly to `adventurelog-proxy` for `trip.*`.
 - Caddy forwards only to internal Docker services on the `shared_services` network.
 - Admin interfaces are protected by Cloudflare Access.
 - Public exceptions are explicit and limited to tokenized guest flows.
@@ -67,6 +68,7 @@ Current active public hostnames:
 - `bio.thegrandprinterofmemesandunfinitetodosservanttonox.tech` -> `bio-dashboard:8501`
 - `bioapi.thegrandprinterofmemesandunfinitetodosservanttonox.tech` -> `bio-dashboard:8000`
 - `ocr.thegrandprinterofmemesandunfinitetodosservanttonox.tech` -> `ocr-auth:8080`
+- `trip.thegrandprinterofmemesandunfinitetodosservanttonox.tech` -> `adventurelog-proxy:80`
 - `watch.thegrandprinterofmemesandunfinitetodosservanttonox.tech` -> `watch-service:3000`
 
 Currently deactivated public hostnames:
@@ -96,20 +98,23 @@ Dedicated service env files:
 
 - `/home/leandro/services/ocr/server/.env`
 - `/home/leandro/services/watch-service/.env`
+- `/home/leandro/services/adventurelog/.env`
 
 ## Operational notes
 
 - `availability`, `barber-booker`, `organizer`, and `homebox` stay disabled behind the `manual` compose profile until explicitly reactivated.
+- `printer-api` handles admin UI access only through Cloudflare Access headers; `/ui/login` is intentionally dead and is not a fallback login page.
 - `bibliothek` is intended to be admin-only and is now expected to require Cloudflare Access both in Cloudflare and at the RoomBooker app layer.
 - `watch` keeps `/watch/*` public by token while `/admin*` is Cloudflare-protected.
 - `ocr` is routed through `ocr-auth`, which validates Cloudflare Access JWTs before reaching the OCR backend.
+- `trip` is routed directly from Cloudflare Tunnel to `adventurelog-proxy`; the proxy needs larger response-header buffers because AdventureLog can emit large auth/session headers on dashboard routes.
 
 ## Deploy
 
 From `/home/leandro/services`:
 
 ```bash
-docker compose up -d caddy cloudflared printer-api bio-dashboard bulk-ocr ocr-auth
+docker compose up -d caddy cloudflared printer-api bio-dashboard bulk-ocr ocr-auth adventurelog-db adventurelog-server adventurelog-web adventurelog-proxy
 docker compose stop availability barber-booker organizer homebox
 ```
 

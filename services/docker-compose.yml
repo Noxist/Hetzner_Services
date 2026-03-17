@@ -36,6 +36,60 @@ services:
     networks:
       - shared_services
 
+  adventurelog-web:
+    image: ghcr.io/seanmorley15/adventurelog-frontend:latest
+    container_name: adventurelog-web
+    restart: unless-stopped
+    env_file:
+      - ./adventurelog/.env
+    depends_on:
+      - adventurelog-server
+    expose:
+      - "3000"
+    networks:
+      - shared_services
+
+  adventurelog-db:
+    image: postgis/postgis:16-3.5
+    container_name: adventurelog-db
+    restart: unless-stopped
+    env_file:
+      - ./adventurelog/.env
+    volumes:
+      - /home/leandro/service_data/adventurelog/postgres:/var/lib/postgresql/data
+    networks:
+      - shared_services
+
+  adventurelog-server:
+    image: ghcr.io/seanmorley15/adventurelog-backend:latest
+    container_name: adventurelog-server
+    restart: unless-stopped
+    env_file:
+      - ./adventurelog/.env
+    depends_on:
+      - adventurelog-db
+    volumes:
+      - /home/leandro/service_data/adventurelog/media:/code/media
+    expose:
+      - "8000"
+    networks:
+      - shared_services
+
+  adventurelog-proxy:
+    image: nginx:alpine
+    container_name: adventurelog-proxy
+    restart: unless-stopped
+    depends_on:
+      - adventurelog-web
+      - adventurelog-server
+    volumes:
+      - ./adventurelog/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /home/leandro/service_data/adventurelog/media:/srv/media:ro
+    expose:
+      - "80"
+    networks:
+      - shared_services
+
   caddy:
     image: caddy:latest
     container_name: caddy
@@ -187,6 +241,7 @@ services:
       - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
     depends_on:
       - caddy
+      - adventurelog-proxy
     networks:
       - shared_services
 
